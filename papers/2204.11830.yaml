@@ -1,0 +1,12 @@
+records:
+- type: reproduction
+  paper_version: v2
+  tags:
+  - independent_reproduction
+  - artifact_incomplete
+  - documentation_incomplete
+  - checkpoint_missing
+  summary: A peer-reviewed 2023 ReScience C replication of Proto2Proto obtained mixed evidence across the paper's claims. Its results weakly supported one claim, supported the proposed evaluation metrics through additional analysis, produced results that conflicted with another claim, and could not execute the intended experiment for a further claim. The report describes the public codebase as incomplete and minimally documented, notes missing elements needed for some experiments, and records that trained model weights were requested from the authors.
+  result: partially_reproduced
+  evidence:
+  - 10.5281/zenodo.8173705
