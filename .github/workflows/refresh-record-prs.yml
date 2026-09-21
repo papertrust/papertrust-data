@@ -8,25 +8,45 @@ on:
 permissions:
   actions: write
   pull-requests: read
+  issues: write
 
 jobs:
   refresh:
     runs-on: ubuntu-latest
     steps:
+      - name: Reconcile merged record issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          mapfile -t issues < <(
+            gh issue list               --repo "$REPO"               --state open               --label "status:pr-open"               --limit 1000               --json number               --jq '.[].number'
+          )
+
+          for issue in "${issues[@]}"; do
+            branch="papertrust/issue-$issue"
+            merged_pr="$(
+              gh pr list                 --repo "$REPO"                 --state merged                 --head "$branch"                 --limit 1                 --json number                 --jq '.[0].number // empty'
+            )"
+
+            if [ -z "$merged_pr" ]; then
+              continue
+            fi
+
+            gh issue edit "$issue" --repo "$REPO" --remove-label "status:pr-open" 2>/dev/null || true
+            gh issue close "$issue" --repo "$REPO" --reason completed               --comment "Canonical record merged in #$merged_pr. Closing this submission automatically."
+          done
+
       - name: Regenerate open bot record PRs from current main
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: |
           mapfile -t branches < <(
-            gh api --paginate "repos/$REPO/pulls?state=open&per_page=100" \
-              --jq '.[] | select(.user.login == "github-actions[bot]" and (.head.ref | startswith("papertrust/issue-"))) | .head.ref'
+            gh api --paginate "repos/$REPO/pulls?state=open&per_page=100"               --jq '.[] | select(.user.login == "github-actions[bot]" and (.head.ref | startswith("papertrust/issue-"))) | .head.ref'
           )
 
           for branch in "${branches[@]}"; do
             issue="${branch#papertrust/issue-}"
-            gh workflow run "Process submission" \
-              --repo "$REPO" \
-              --ref main \
-              -f "issue_number=$issue"
+            gh workflow run "Process submission"               --repo "$REPO"               --ref main               -f "issue_number=$issue"
           done
