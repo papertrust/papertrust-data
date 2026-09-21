@@ -1,0 +1,10 @@
+records:
+- type: reproduction
+  paper_version: v3
+  tags:
+  - independent_reproduction
+  - evaluation_code_missing
+  summary: A peer-reviewed 2023 ReScience C replication reproduced the main-body experiments on prefix sums, mazes, chess, and related recurrent reasoning tests. The replication reports that the experiments verified the original claims and that its main results matched the reported results, with additional analysis for perturbation testing. Code for the original perturbation experiments was not available, so that part was independently implemented by the replicators.
+  result: reproduced
+  evidence:
+  - 10.5281/zenodo.8173654
