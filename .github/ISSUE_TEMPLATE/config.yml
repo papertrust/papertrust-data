@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: General discussion
+    url: https://github.com/papertrust/papertrust/discussions
+    about: Use the website repository for product and policy discussions.

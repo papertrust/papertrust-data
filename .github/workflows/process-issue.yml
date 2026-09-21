@@ -1,0 +1,143 @@
+name: Process submission
+
+on:
+  issues:
+    types: [opened, edited, reopened]
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  statuses: write
+
+jobs:
+  process:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: papertrust-issue-${{ github.event.issue.number }}
+      cancel-in-progress: true
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Validate submission format
+        id: validate
+        continue-on-error: true
+        run: python scripts/validate_issue.py
+
+      - name: Reject invalid submission
+        if: steps.validate.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          branch="papertrust/issue-$ISSUE"
+          existing="$(gh pr list --repo "$REPO" --head "$branch" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            gh pr close "$existing" --repo "$REPO" --comment "The source issue no longer satisfies the PaperTrust submission format."
+          fi
+          gh issue edit "$ISSUE" --repo "$REPO" --remove-label "status:pending" 2>/dev/null || true
+          gh issue edit "$ISSUE" --repo "$REPO" --remove-label "status:format-valid" 2>/dev/null || true
+          gh issue edit "$ISSUE" --repo "$REPO" --remove-label "status:pr-open" 2>/dev/null || true
+          gh issue comment "$ISSUE" --repo "$REPO" --body "This submission does not satisfy the PaperTrust format requirements and has been closed automatically. Edit the structured fields and reopen the issue to try again."
+          gh issue close "$ISSUE" --repo "$REPO" --reason "not planned"
+
+      - name: Mark format-valid
+        if: steps.validate.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+          TITLE: ${{ github.event.issue.title }}
+        run: |
+          gh issue edit "$ISSUE" --repo "$REPO" --remove-label "status:pending" 2>/dev/null || true
+          gh issue edit "$ISSUE" --repo "$REPO" --add-label "status:format-valid"
+          case "$TITLE" in
+            "[Reproduction]"*) type_label="submission:reproduction" ;;
+            "[Artifact review]"*) type_label="submission:artifact-review" ;;
+            *) type_label="" ;;
+          esac
+          if [ -n "$type_label" ]; then
+            gh issue edit "$ISSUE" --repo "$REPO" --add-label "$type_label"
+          fi
+
+      - name: Generate canonical record
+        if: steps.validate.outcome == 'success'
+        run: |
+          python scripts/issue_to_record.py
+          python scripts/validate.py
+
+      - name: Detect duplicate
+        if: steps.validate.outcome == 'success'
+        id: diff
+        run: |
+          if [ -z "$(git status --porcelain -- papers)" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Close duplicate submission
+        if: steps.validate.outcome == 'success' && steps.diff.outputs.changed == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh issue edit "$ISSUE" --repo "$REPO" --add-label "status:duplicate"
+          gh issue comment "$ISSUE" --repo "$REPO" --body "An equivalent canonical PaperTrust record already exists. No pull request is needed."
+          gh issue close "$ISSUE" --repo "$REPO" --reason "not planned"
+
+      - name: Create or update canonical-record PR
+        if: steps.validate.outcome == 'success' && steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          branch="papertrust/issue-$ISSUE"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add papers
+          git commit -m "Add record from issue #$ISSUE"
+          git push --force origin "HEAD:refs/heads/$branch"
+
+          sha="$(git rev-parse HEAD)"
+          gh api \
+            --method POST \
+            "repos/$REPO/statuses/$sha" \
+            -f state=success \
+            -f context="PaperTrust / validate" \
+            -f description="Canonical record passed schema validation" >/dev/null
+
+          pr_body="$(printf 'Generated automatically from a format-valid community submission.\n\nSource issue: #%s\n\nCloses #%s\n\nReviewers should verify the evidence and the canonical YAML diff before merging.' "$ISSUE" "$ISSUE")"
+
+          existing="$(gh pr list --repo "$REPO" --head "$branch" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --repo "$REPO" \
+              --title "Add PaperTrust record from issue #$ISSUE" \
+              --body "$pr_body"
+            gh issue edit "$ISSUE" --repo "$REPO" --add-label "status:pr-open"
+            exit 0
+          fi
+
+          pr_url="$(gh pr create \
+            --repo "$REPO" \
+            --head "$branch" \
+            --base main \
+            --title "Add PaperTrust record from issue #$ISSUE" \
+            --body "$pr_body")"
+
+          gh issue comment "$ISSUE" --repo "$REPO" --body "Format validation passed. The canonical-record pull request is ready for review: $pr_url"
+          gh issue edit "$ISSUE" --repo "$REPO" --add-label "status:pr-open"

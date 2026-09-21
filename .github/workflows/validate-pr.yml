@@ -1,0 +1,57 @@
+name: Validate records
+
+on:
+  pull_request:
+    paths:
+      - "papers/**/*.yaml"
+      - "schema/**"
+      - "scripts/validate.py"
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Validate canonical data
+        id: validation
+        continue-on-error: true
+        run: python scripts/validate.py
+
+      - name: Publish required validation status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          OUTCOME: ${{ steps.validation.outcome }}
+        run: |
+          if [ "$OUTCOME" = "success" ]; then
+            state="success"
+            description="Canonical record passed schema validation"
+          else
+            state="failure"
+            description="Canonical record failed schema validation"
+          fi
+
+          gh api \
+            --method POST \
+            "repos/$REPO/statuses/$SHA" \
+            -f state="$state" \
+            -f context="PaperTrust / validate" \
+            -f description="$description" >/dev/null
+
+      - name: Fail invalid pull request
+        if: steps.validation.outcome != 'success'
+        run: exit 1

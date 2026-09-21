@@ -1,0 +1,34 @@
+name: Submit an artifact review
+description: Record the public availability or condition of research artifacts.
+title: "[Artifact review] arXiv:"
+labels: ["submission:artifact-review", "status:pending"]
+body:
+  - type: input
+    id: arxiv
+    attributes:
+      label: arXiv ID
+      placeholder: "2511.15927"
+    validations:
+      required: true
+  - type: input
+    id: tags
+    attributes:
+      label: Tags
+      placeholder: "checkpoint_missing, raw_results_missing"
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: State only verifiable artifact facts and where you checked.
+    validations:
+      required: true
+  - type: input
+    id: evidence
+    attributes:
+      label: Evidence DOI
+      description: DOI of the archived evidence/review material.
+      placeholder: "10.5281/zenodo.1234567"
+    validations:
+      required: true

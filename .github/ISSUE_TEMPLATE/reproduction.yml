@@ -1,0 +1,54 @@
+name: Submit a reproduction
+description: Submit an evidence-backed reproduction record for a paper.
+title: "[Reproduction] arXiv:"
+labels: ["submission:reproduction", "status:pending"]
+body:
+  - type: input
+    id: arxiv
+    attributes:
+      label: arXiv ID
+      placeholder: "2511.15927"
+    validations:
+      required: true
+  - type: input
+    id: paper_version
+    attributes:
+      label: Paper version
+      description: The exact arXiv paper version this reproduction targets.
+      placeholder: "v4"
+    validations:
+      required: true
+  - type: dropdown
+    id: result
+    attributes:
+      label: Result
+      options:
+        - reproduced
+        - partially_reproduced
+        - not_reproduced
+        - inconclusive
+    validations:
+      required: true
+  - type: input
+    id: tags
+    attributes:
+      label: Tags
+      description: Comma-separated PaperTrust tags. The workflow validates the vocabulary.
+      placeholder: "performance_mismatch, independent_reproduction"
+    validations:
+      required: true
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: Concisely state what was reproduced and what happened.
+    validations:
+      required: true
+  - type: input
+    id: evidence
+    attributes:
+      label: Evidence DOI
+      description: Use a version-specific DOI for an independently hosted reproduction artifact.
+      placeholder: "10.5281/zenodo.1234567"
+    validations:
+      required: true
