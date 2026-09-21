@@ -9,8 +9,7 @@ on:
       - "tests/**"
       - "requirements.txt"
       - ".github/ISSUE_TEMPLATE/**"
-      - ".github/workflows/process-issue.yml"
-      - ".github/workflows/validate-pr.yml"
+      - ".github/workflows/**"
 
 permissions:
   contents: read
