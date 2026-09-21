@@ -5,10 +5,10 @@ PaperTrust accepts evidence-backed records about reproducibility and public rese
 ## Principles
 
 - One paper file per arXiv identifier.
-- Every reproduction record must name the exact arXiv paper version it evaluates.
-- Every record needs a concise human-readable summary.
+- Every reproduction or artifact-review record must resolve to an exact arXiv paper version. The submission UI defaults to the latest version.
+- Every record needs a concise human-readable Markdown summary. Raw HTML, embedded images, dangerous URL schemes, control characters, and reserved PaperTrust field headings are rejected.
 - Machine-readable `result` and `tags` are required where applicable.
-- Evidence must be deposited independently and referenced by a version-specific DOI.
+- A version-specific evidence DOI is encouraged when independent archived evidence exists, but it is not mandatory.
 - Do not label people or papers as fraudulent, dishonest, fake, or untrustworthy.
 - State observable and reviewable facts.
 - Issues must be created from the submitter's own GitHub account. Pull requests are opened mechanically by GitHub Actions after format validation.

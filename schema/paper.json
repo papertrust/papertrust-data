@@ -2,7 +2,9 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["records"],
+  "required": [
+    "records"
+  ],
   "properties": {
     "records": {
       "type": "array",
@@ -10,17 +12,34 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["type", "summary", "evidence"],
+        "required": [
+          "type",
+          "summary"
+        ],
         "properties": {
           "type": {
-            "enum": ["reproduction", "artifact_review", "correction", "author_response", "retraction"]
+            "enum": [
+              "reproduction",
+              "artifact_review",
+              "correction",
+              "author_response",
+              "retraction"
+            ]
           },
           "paper_version": {
             "type": "string",
             "pattern": "^v[1-9][0-9]*$"
           },
           "result": {
-            "enum": ["reproduced", "partially_reproduced", "not_reproduced", "inconclusive", "verified", "resolved", "withdrawn"]
+            "enum": [
+              "reproduced",
+              "partially_reproduced",
+              "not_reproduced",
+              "inconclusive",
+              "verified",
+              "resolved",
+              "withdrawn"
+            ]
           },
           "tags": {
             "type": "array",
@@ -52,7 +71,7 @@
           "summary": {
             "type": "string",
             "minLength": 20,
-            "maxLength": 2000
+            "maxLength": 4000
           },
           "evidence": {
             "type": "array",
@@ -66,8 +85,36 @@
         },
         "allOf": [
           {
-            "if": {"properties": {"type": {"const": "reproduction"}}},
-            "then": {"required": ["paper_version", "result", "tags"]}
+            "if": {
+              "properties": {
+                "type": {
+                  "enum": [
+                    "reproduction",
+                    "artifact_review"
+                  ]
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "paper_version",
+                "tags"
+              ]
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "type": {
+                  "const": "reproduction"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "result"
+              ]
+            }
           }
         ]
       }
