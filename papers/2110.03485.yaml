@@ -1,0 +1,11 @@
+records:
+- type: reproduction
+  paper_version: v5
+  tags:
+  - independent_reproduction
+  - evaluation_code_missing
+  - undocumented_configuration
+  summary: A peer-reviewed 2023 ReScience C replication tested CartoonX's interpretability, distortion, and model-agnosticism claims. The study reports that its results supported the original claims and reproduced most experiments, although exact numerical reproduction was not achieved in every case. The replicators also had to implement code for part of the evaluation and reported unclear hyperparameter or implementation settings that required clarification.
+  result: partially_reproduced
+  evidence:
+  - 10.5281/zenodo.8173672
