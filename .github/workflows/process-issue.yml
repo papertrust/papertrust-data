@@ -156,7 +156,57 @@ jobs:
             -f context="PaperTrust / validate" \
             -f description="Canonical record passed schema validation" >/dev/null
 
-          pr_body="$(printf 'Generated automatically from a format-valid community submission.\n\nSource issue: #%s\n\nCloses #%s\n\nReviewers should verify the evidence and the canonical YAML diff before merging.' "$ISSUE" "$ISSUE")"
+          record_file="$(git show --name-only --format='' HEAD -- papers | sed '/^$/d' | head -n1)"
+          metadata="$(python - "$record_file" <<'PY'
+          import json
+          from pathlib import Path
+          import sys
+          import yaml
+
+          path = Path(sys.argv[1])
+          data = yaml.safe_load(path.read_text(encoding="utf-8"))
+          record = data["records"][-1]
+          arxiv_id = str(path.with_suffix("")).removeprefix("papers/")
+          print(json.dumps({
+              "arxiv_id": arxiv_id,
+              "type": record["type"],
+              "paper_version": record.get("paper_version", "n/a"),
+              "tags": ", ".join(record.get("tags", [])) or "none",
+              "evidence": ", ".join(record.get("evidence", [])) or "not supplied (optional)",
+          }))
+          PY
+          )"
+
+          arxiv_id="$(jq -r .arxiv_id <<<"$metadata")"
+          record_type="$(jq -r .type <<<"$metadata")"
+          paper_version="$(jq -r .paper_version <<<"$metadata")"
+          tags="$(jq -r .tags <<<"$metadata")"
+          evidence="$(jq -r .evidence <<<"$metadata")"
+
+          pr_body="$(cat <<EOF
+          Generated automatically from a format-valid PaperTrust submission.
+
+          ## Canonical record
+          - **Source issue:** #$ISSUE
+          - **arXiv:** $arxiv_id
+          - **Resolved paper version:** $paper_version
+          - **Record type:** $record_type
+          - **Tags:** $tags
+          - **Evidence DOI:** $evidence
+
+          ## Automated checks
+          - Submission parser and injection-safety tests: **passed**
+          - Canonical YAML/schema validation: **passed**
+          - Required status **PaperTrust / validate**: **success**
+          - Auto-merge: **enabled**
+          - Merge policy: **2 approvals required**
+          - Temporary source branch: **deleted automatically after merge**
+
+          Reviewers should verify the factual evidence and the canonical YAML diff. The source Issue will close automatically when this PR merges.
+
+          Closes #$ISSUE
+          EOF
+          )"
 
           pr_number="$(gh pr list --repo "$REPO" --head "$branch" --state open --json number --jq '.[0].number // empty')"
           if [ -n "$pr_number" ]; then
@@ -171,26 +221,29 @@ jobs:
               --title "Add PaperTrust record from issue #$ISSUE" \
               --body "$pr_body")"
             pr_number="${pr_url##*/}"
-            gh issue comment "$ISSUE" --repo "$REPO" --body "Format validation passed. The canonical-record pull request is ready for review: $pr_url"
+
+            issue_comment="$(cat <<EOF
+          PaperTrust accepted this structured submission and generated its canonical record.
+
+          - **Canonical PR:** $pr_url
+          - **arXiv:** $arxiv_id
+          - **Resolved version:** $paper_version
+          - **Type:** $record_type
+          - **Tags:** $tags
+          - **Evidence DOI:** $evidence
+          - **Parser/security tests:** passed
+          - **Canonical validation:** passed
+          - **Auto-merge:** enabled
+          - **Merge gate:** 2 approvals
+
+          No reviewer is pinged automatically. Once the approval requirement is satisfied, GitHub will squash-merge the PR, delete its temporary branch, and close this Issue automatically.
+          EOF
+            )"
+            gh issue comment "$ISSUE" --repo "$REPO" --body "$issue_comment"
+
+            gh pr comment "$pr_number" --repo "$REPO" --body "Automation initialized successfully. The record was generated from Issue #$ISSUE on the current main branch, validated, marked with the required PaperTrust / validate status, and placed in protected auto-merge. No PR code was executed during validation."
           fi
 
           gh issue edit "$ISSUE" --repo "$REPO" --add-label "status:pr-open"
-
-          mapfile -t reviewers < <(
-            gh api --paginate "repos/$REPO/collaborators?affiliation=all&per_page=100" \
-              --jq '.[] | select(.type == "User" and (.permissions.push == true or .permissions.admin == true)) | .login' \
-              | sort -u
-          )
-          pr_author="$(gh api "repos/$REPO/pulls/$pr_number" --jq '.user.login')"
-          args=()
-          for reviewer in "${reviewers[@]}"; do
-            [ "$reviewer" = "$pr_author" ] && continue
-            args+=(-f "reviewers[]=$reviewer")
-          done
-          if [ "${#args[@]}" -gt 0 ]; then
-            gh api --method POST \
-              "repos/$REPO/pulls/$pr_number/requested_reviewers" \
-              "${args[@]}" >/dev/null
-          fi
 
           gh pr merge "$pr_number" --repo "$REPO" --auto --squash --delete-branch

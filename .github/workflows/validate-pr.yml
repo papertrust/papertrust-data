@@ -1,18 +1,12 @@
 name: Validate records
 
 on:
-  pull_request:
-    paths:
-      - "papers/**/*.yaml"
-      - "schema/**"
-      - "scripts/**"
-      - "tests/**"
-      - "requirements.txt"
-      - ".github/ISSUE_TEMPLATE/**"
-      - ".github/workflows/**"
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
   contents: read
+  pull-requests: read
   statuses: write
 
 jobs:
@@ -20,6 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -28,7 +25,54 @@ jobs:
 
       - run: pip install -r requirements.txt
 
-      - name: Test untrusted submission parsing
+      - name: Materialize record data from PR
+        id: materialize
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh api --paginate "repos/$REPO/pulls/$PR_NUMBER/files?per_page=100"             --jq '.[].filename' > /tmp/papertrust-pr-files
+
+          if grep -Ev '^papers/[A-Za-z0-9._/-]+\.yaml$' /tmp/papertrust-pr-files | grep -q .; then
+            echo "Only canonical papers/*.yaml changes are accepted through pull requests." >&2
+            exit 1
+          fi
+
+          git fetch --no-tags origin             "pull/$PR_NUMBER/head:refs/remotes/origin/papertrust-pr-head"
+
+          rm -rf papers
+          mkdir -p papers
+
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
+
+          ref = "refs/remotes/origin/papertrust-pr-head"
+          raw = subprocess.check_output(
+              ["git", "ls-tree", "-r", "-z", ref, "--", "papers"]
+          )
+          pattern = re.compile(r"^papers/(?:[A-Za-z0-9._-]+/)*[A-Za-z0-9._-]+\.yaml$")
+
+          for entry in raw.split(b"\0"):
+              if not entry:
+                  continue
+              meta, path_bytes = entry.split(b"\t", 1)
+              mode, kind, sha = meta.decode("ascii").split()
+              path = path_bytes.decode("utf-8")
+              if kind != "blob" or mode not in {"100644", "100755"}:
+                  raise SystemExit(f"unsupported Git object in papers/: {path}")
+              if not pattern.fullmatch(path) or ".." in Path(path).parts:
+                  raise SystemExit(f"unsafe canonical record path: {path}")
+
+              content = subprocess.check_output(["git", "cat-file", "blob", sha])
+              destination = Path(path)
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              destination.write_bytes(content)
+          PY
+
+      - name: Test trusted submission parser
         id: parser_tests
         continue-on-error: true
         run: python -m unittest discover -s tests -v
@@ -44,24 +88,20 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           SHA: ${{ github.event.pull_request.head.sha }}
+          MATERIALIZE_OUTCOME: ${{ steps.materialize.outcome }}
           PARSER_OUTCOME: ${{ steps.parser_tests.outcome }}
           VALIDATION_OUTCOME: ${{ steps.validation.outcome }}
         run: |
-          if [ "$PARSER_OUTCOME" = "success" ] && [ "$VALIDATION_OUTCOME" = "success" ]; then
+          if [ "$MATERIALIZE_OUTCOME" = "success" ] &&              [ "$PARSER_OUTCOME" = "success" ] &&              [ "$VALIDATION_OUTCOME" = "success" ]; then
             state="success"
-            description="Canonical data and submission parser passed validation"
+            description="Canonical record passed trusted validation"
           else
             state="failure"
             description="PaperTrust validation failed"
           fi
 
-          gh api \
-            --method POST \
-            "repos/$REPO/statuses/$SHA" \
-            -f state="$state" \
-            -f context="PaperTrust / validate" \
-            -f description="$description" >/dev/null
+          gh api             --method POST             "repos/$REPO/statuses/$SHA"             -f state="$state"             -f context="PaperTrust / validate"             -f description="$description" >/dev/null
 
       - name: Fail invalid pull request
-        if: steps.parser_tests.outcome != 'success' || steps.validation.outcome != 'success'
+        if: steps.materialize.outcome != 'success' || steps.parser_tests.outcome != 'success' || steps.validation.outcome != 'success'
         run: exit 1
