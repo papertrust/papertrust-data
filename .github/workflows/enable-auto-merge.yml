@@ -19,7 +19,7 @@ jobs:
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          gh api             --method POST             "repos/$REPO/pulls/$PR_NUMBER/requested_reviewers"             -f team_reviewers[]=reviewers >/dev/null
+          gh api             --method POST             "repos/$REPO/pulls/$PR_NUMBER/requested_reviewers"             -f reviewers[]=ggipp             -f reviewers[]=papertrustAdrian >/dev/null
 
       - name: Enable squash auto-merge
         env:
