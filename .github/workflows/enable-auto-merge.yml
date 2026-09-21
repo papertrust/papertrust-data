@@ -13,13 +13,26 @@ jobs:
     if: github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
-      - name: Request PaperTrust reviewers
+      - name: Request writable collaborators individually
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
-          gh api             --method POST             "repos/$REPO/pulls/$PR_NUMBER/requested_reviewers"             -f reviewers[]=ggipp             -f reviewers[]=papertrustAdrian             -f reviewers[]=heclay111             -f reviewers[]=Norsky957 >/dev/null
+          mapfile -t reviewers < <(
+            gh api --paginate "repos/$REPO/collaborators?affiliation=all&per_page=100"               --jq '.[] | select(.type == "User" and (.permissions.push == true or .permissions.admin == true)) | .login'               | sort -u
+          )
+
+          args=()
+          for reviewer in "${reviewers[@]}"; do
+            [ "$reviewer" = "$PR_AUTHOR" ] && continue
+            args+=(-f "reviewers[]=$reviewer")
+          done
+
+          if [ "${#args[@]}" -gt 0 ]; then
+            gh api --method POST               "repos/$REPO/pulls/$PR_NUMBER/requested_reviewers"               "${args[@]}" >/dev/null
+          fi
 
       - name: Enable squash auto-merge
         env:

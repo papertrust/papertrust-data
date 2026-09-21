@@ -3,6 +3,12 @@ name: Process submission
 on:
   issues:
     types: [opened, edited, reopened]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: Source PaperTrust issue number to regenerate
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -14,7 +20,7 @@ jobs:
   process:
     runs-on: ubuntu-latest
     concurrency:
-      group: papertrust-issue-${{ github.event.issue.number }}
+      group: papertrust-issue-${{ github.event.issue.number || inputs.issue_number }}
       cancel-in-progress: true
 
     steps:
@@ -28,6 +34,17 @@ jobs:
           cache: pip
 
       - run: pip install -r requirements.txt
+
+      - name: Prepare dispatched issue event
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          ISSUE: ${{ inputs.issue_number }}
+        run: |
+          gh api "repos/$REPO/issues/$ISSUE" > /tmp/papertrust-issue.json
+          jq -n --slurpfile issue /tmp/papertrust-issue.json '{issue: $issue[0]}' > /tmp/papertrust-event.json
+          echo "PAPERTRUST_EVENT_PATH=/tmp/papertrust-event.json" >> "$GITHUB_ENV"
 
       - name: Run submission parser tests
         run: python -m unittest discover -s tests -v
@@ -43,7 +60,7 @@ jobs:
         if: steps.validate.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
-          ISSUE: ${{ github.event.issue.number }}
+          ISSUE: ${{ github.event.issue.number || inputs.issue_number }}
           REPO: ${{ github.repository }}
         run: |
           branch="papertrust/issue-$ISSUE"
@@ -62,7 +79,7 @@ jobs:
         if: steps.validate.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
-          ISSUE: ${{ github.event.issue.number }}
+          ISSUE: ${{ github.event.issue.number || inputs.issue_number }}
           REPO: ${{ github.repository }}
           KIND: ${{ steps.validate.outputs.kind }}
         run: |
@@ -88,7 +105,7 @@ jobs:
         if: steps.validate.outcome == 'success' && steps.generate.outcome == 'failure'
         env:
           GH_TOKEN: ${{ github.token }}
-          ISSUE: ${{ github.event.issue.number }}
+          ISSUE: ${{ github.event.issue.number || inputs.issue_number }}
           REPO: ${{ github.repository }}
         run: |
           gh issue edit "$ISSUE" --repo "$REPO" --remove-label "status:format-valid" 2>/dev/null || true
@@ -109,7 +126,7 @@ jobs:
         if: steps.generate.outcome == 'success' && steps.diff.outputs.changed == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
-          ISSUE: ${{ github.event.issue.number }}
+          ISSUE: ${{ github.event.issue.number || inputs.issue_number }}
           REPO: ${{ github.repository }}
         run: |
           gh issue edit "$ISSUE" --repo "$REPO" --add-label "status:duplicate"
@@ -120,13 +137,13 @@ jobs:
         if: steps.generate.outcome == 'success' && steps.diff.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          ISSUE: ${{ github.event.issue.number }}
+          ISSUE: ${{ github.event.issue.number || inputs.issue_number }}
           REPO: ${{ github.repository }}
         run: |
           branch="papertrust/issue-$ISSUE"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git checkout -b "$branch"
+          git checkout -B "$branch"
           git add papers
           git commit -m "Add record from issue #$ISSUE"
           git push --force origin "HEAD:refs/heads/$branch"
@@ -141,21 +158,37 @@ jobs:
 
           pr_body="$(printf 'Generated automatically from a format-valid community submission.\n\nSource issue: #%s\n\nCloses #%s\n\nReviewers should verify the evidence and the canonical YAML diff before merging.' "$ISSUE" "$ISSUE")"
 
-          existing="$(gh pr list --repo "$REPO" --head "$branch" --state open --json number --jq '.[0].number // empty')"
-          if [ -n "$existing" ]; then
-            gh pr edit "$existing" --repo "$REPO" \
+          pr_number="$(gh pr list --repo "$REPO" --head "$branch" --state open --json number --jq '.[0].number // empty')"
+          if [ -n "$pr_number" ]; then
+            gh pr edit "$pr_number" --repo "$REPO" \
               --title "Add PaperTrust record from issue #$ISSUE" \
               --body "$pr_body"
-            gh issue edit "$ISSUE" --repo "$REPO" --add-label "status:pr-open"
-            exit 0
+          else
+            pr_url="$(gh pr create \
+              --repo "$REPO" \
+              --head "$branch" \
+              --base main \
+              --title "Add PaperTrust record from issue #$ISSUE" \
+              --body "$pr_body")"
+            pr_number="${pr_url##*/}"
+            gh issue comment "$ISSUE" --repo "$REPO" --body "Format validation passed. The canonical-record pull request is ready for review: $pr_url"
           fi
 
-          pr_url="$(gh pr create \
-            --repo "$REPO" \
-            --head "$branch" \
-            --base main \
-            --title "Add PaperTrust record from issue #$ISSUE" \
-            --body "$pr_body")"
-
-          gh issue comment "$ISSUE" --repo "$REPO" --body "Format validation passed. The canonical-record pull request is ready for review: $pr_url"
           gh issue edit "$ISSUE" --repo "$REPO" --add-label "status:pr-open"
+
+          mapfile -t reviewers < <(
+            gh api --paginate "repos/$REPO/collaborators?affiliation=all&per_page=100" \
+              --jq '.[] | select(.type == "User" and (.permissions.push == true or .permissions.admin == true)) | .login' \
+              | sort -u
+          )
+          args=()
+          for reviewer in "${reviewers[@]}"; do
+            args+=(-f "reviewers[]=$reviewer")
+          done
+          if [ "${#args[@]}" -gt 0 ]; then
+            gh api --method POST \
+              "repos/$REPO/pulls/$pr_number/requested_reviewers" \
+              "${args[@]}" >/dev/null
+          fi
+
+          gh pr merge "$pr_number" --repo "$REPO" --auto --squash --delete-branch

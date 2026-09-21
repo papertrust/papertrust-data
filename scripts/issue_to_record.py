@@ -31,7 +31,8 @@ def load_or_create(path: pathlib.Path) -> dict:
 
 
 def main() -> int:
-    with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as handle:
+    event_path = os.environ.get("PAPERTRUST_EVENT_PATH") or os.environ["GITHUB_EVENT_PATH"]
+    with open(event_path, encoding="utf-8") as handle:
         event = json.load(handle)
 
     submission = parse_issue(event["issue"])

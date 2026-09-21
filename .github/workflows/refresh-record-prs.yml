@@ -1,0 +1,32 @@
+name: Refresh record PRs
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  pull-requests: read
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Regenerate open bot record PRs from current main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          mapfile -t branches < <(
+            gh api --paginate "repos/$REPO/pulls?state=open&per_page=100" \
+              --jq '.[] | select(.user.login == "github-actions[bot]" and (.head.ref | startswith("papertrust/issue-"))) | .head.ref'
+          )
+
+          for branch in "${branches[@]}"; do
+            issue="${branch#papertrust/issue-}"
+            gh workflow run "Process submission" \
+              --repo "$REPO" \
+              --ref main \
+              -f "issue_number=$issue"
+          done

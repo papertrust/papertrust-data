@@ -7,7 +7,8 @@ import sys
 
 from submission import SubmissionError, parse_issue
 
-with open(os.environ["GITHUB_EVENT_PATH"], encoding="utf-8") as handle:
+event_path = os.environ.get("PAPERTRUST_EVENT_PATH") or os.environ["GITHUB_EVENT_PATH"]
+with open(event_path, encoding="utf-8") as handle:
     event = json.load(handle)
 
 try:
