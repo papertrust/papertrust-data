@@ -181,8 +181,10 @@ jobs:
               --jq '.[] | select(.type == "User" and (.permissions.push == true or .permissions.admin == true)) | .login' \
               | sort -u
           )
+          pr_author="$(gh api "repos/$REPO/pulls/$pr_number" --jq '.user.login')"
           args=()
           for reviewer in "${reviewers[@]}"; do
+            [ "$reviewer" = "$pr_author" ] && continue
             args+=(-f "reviewers[]=$reviewer")
           done
           if [ "${#args[@]}" -gt 0 ]; then
