@@ -1,0 +1,13 @@
+records:
+- type: artifact_review
+  paper_version: v3
+  tags:
+  - disputed
+  - documentation_incomplete
+  summary: 'The arXiv record for this paper states that the paper has been **withdrawn** because more effective experiments should be completed.
+
+
+    Primary source: https://arxiv.org/abs/1508.07175
+
+
+    This PaperTrust record reports the withdrawal status and the reason stated on arXiv. It does not infer misconduct or author intent.'
