@@ -157,42 +157,47 @@ jobs:
             -f description="Canonical record passed schema validation" >/dev/null
 
           record_file="$(git show --name-only --format='' HEAD -- papers | sed '/^$/d' | head -n1)"
-          metadata="$(python - "$record_file" <<'PY'
+          python - "$record_file" "$ISSUE" <<'PY'
           import json
           from pathlib import Path
           import sys
           import yaml
 
           path = Path(sys.argv[1])
+          issue = sys.argv[2]
           data = yaml.safe_load(path.read_text(encoding="utf-8"))
           record = data["records"][-1]
           arxiv_id = str(path.with_suffix("")).removeprefix("papers/")
-          print(json.dumps({
+          record_type = record["type"]
+          paper_version = record.get("paper_version", "n/a")
+          tags = ", ".join(record.get("tags", [])) or "none"
+          evidence = ", ".join(record.get("evidence", [])) or "not supplied (optional)"
+          summary = record["summary"]
+
+          metadata = {
               "arxiv_id": arxiv_id,
-              "type": record["type"],
-              "paper_version": record.get("paper_version", "n/a"),
-              "tags": ", ".join(record.get("tags", [])) or "none",
-              "evidence": ", ".join(record.get("evidence", [])) or "not supplied (optional)",
-          }))
-          PY
-          )"
+              "type": record_type,
+              "paper_version": paper_version,
+              "tags": tags,
+              "evidence": evidence,
+          }
+          Path("/tmp/papertrust-metadata.json").write_text(
+              json.dumps(metadata), encoding="utf-8"
+          )
 
-          arxiv_id="$(jq -r .arxiv_id <<<"$metadata")"
-          record_type="$(jq -r .type <<<"$metadata")"
-          paper_version="$(jq -r .paper_version <<<"$metadata")"
-          tags="$(jq -r .tags <<<"$metadata")"
-          evidence="$(jq -r .evidence <<<"$metadata")"
-
-          pr_body="$(cat <<EOF
-          Generated automatically from a format-valid PaperTrust submission.
+          body = f"""Generated automatically from a format-valid PaperTrust submission.
 
           ## Canonical record
-          - **Source issue:** #$ISSUE
-          - **arXiv:** $arxiv_id
-          - **Resolved paper version:** $paper_version
-          - **Record type:** $record_type
-          - **Tags:** $tags
-          - **Evidence DOI:** $evidence
+          - **Source issue:** #{issue}
+          - **arXiv:** {arxiv_id}
+          - **Resolved paper version:** {paper_version}
+          - **Record type:** {record_type}
+          - **Tags:** {tags}
+          - **Evidence DOI:** {evidence}
+
+          ## Summary
+
+          {summary}
 
           ## Automated checks
           - Submission parser and injection-safety tests: **passed**
@@ -204,22 +209,29 @@ jobs:
 
           Reviewers should verify the factual evidence and the canonical YAML diff. The source Issue will close automatically when this PR merges.
 
-          Closes #$ISSUE
-          EOF
-          )"
+          Closes #{issue}
+          """
+          Path("/tmp/papertrust-pr-body.md").write_text(body, encoding="utf-8")
+          PY
+
+          arxiv_id="$(jq -r .arxiv_id /tmp/papertrust-metadata.json)"
+          record_type="$(jq -r .type /tmp/papertrust-metadata.json)"
+          paper_version="$(jq -r .paper_version /tmp/papertrust-metadata.json)"
+          tags="$(jq -r .tags /tmp/papertrust-metadata.json)"
+          evidence="$(jq -r .evidence /tmp/papertrust-metadata.json)"
 
           pr_number="$(gh pr list --repo "$REPO" --head "$branch" --state open --json number --jq '.[0].number // empty')"
           if [ -n "$pr_number" ]; then
             gh pr edit "$pr_number" --repo "$REPO" \
               --title "Add PaperTrust record from issue #$ISSUE" \
-              --body "$pr_body"
+              --body-file /tmp/papertrust-pr-body.md
           else
             pr_url="$(gh pr create \
               --repo "$REPO" \
               --head "$branch" \
               --base main \
               --title "Add PaperTrust record from issue #$ISSUE" \
-              --body "$pr_body")"
+              --body-file /tmp/papertrust-pr-body.md)"
             pr_number="${pr_url##*/}"
 
             issue_comment="$(cat <<EOF
