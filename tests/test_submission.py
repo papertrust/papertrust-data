@@ -1,15 +1,22 @@
+import io
 import unittest
 from unittest.mock import patch
 
-from scripts.submission import SubmissionError, build_record, parse_fields, parse_issue
+from scripts.submission import (
+    SubmissionError,
+    build_record,
+    fetch_arxiv_metadata,
+    parse_fields,
+    parse_issue,
+)
 
 
 def reproduction_issue(summary: str, *, doi: str = "", version: str = "latest"):
     return {
-        "title": "[Reproduction] arXiv:2511.15927",
+        "title": "[Reproduction] arXiv:9913.99999",
         "body": f"""### arXiv ID
 
-2511.15927
+9913.99999
 
 ### Paper version
 
@@ -70,6 +77,25 @@ class SubmissionTests(unittest.TestCase):
     def test_non_http_markdown_links_are_rejected(self):
         with self.assertRaisesRegex(SubmissionError, "HTTP"):
             parse_issue(reproduction_issue("This is long enough and links to [local data](file:///etc/passwd)."))
+
+    def test_fetch_arxiv_metadata_uses_exact_version(self):
+        page = b"""<!doctype html>
+<html><head>
+<meta name="citation_title" content="  A Synthetic Paper Title  ">
+<meta name="citation_author" content="Ada Example">
+<meta name="citation_author" content="Lin Example">
+<meta name="citation_abstract" content="A synthetic abstract used only for automated testing.">
+</head></html>
+"""
+        with patch("scripts.submission.urllib.request.urlopen", return_value=io.BytesIO(page)) as mocked:
+            metadata = fetch_arxiv_metadata("9913.99999", "v3")
+
+        requested_url = mocked.call_args.args[0].full_url
+        self.assertEqual(requested_url, "https://arxiv.org/abs/9913.99999v3")
+        self.assertEqual(metadata.title, "A Synthetic Paper Title")
+        self.assertEqual(metadata.authors, ("Ada Example", "Lin Example"))
+        self.assertEqual(metadata.abstract, "A synthetic abstract used only for automated testing.")
+        self.assertEqual(metadata.pdf_url, "https://arxiv.org/pdf/9913.99999v3")
 
     def test_build_record_resolves_latest_and_omits_evidence(self):
         submission = parse_issue(reproduction_issue("A sufficiently detailed reproduction summary for testing."))

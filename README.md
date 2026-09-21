@@ -12,7 +12,7 @@ PaperTrust stores only reviewed community records. Paper metadata is resolved fr
 Each discussed paper has one YAML file named by its arXiv identifier:
 
 ```
-papers/2511.15927.yaml
+papers/YYMM.NNNNN.yaml
 ```
 
 Each paper-level record identifies the exact arXiv **paper version it evaluates**. Submission forms default to the latest version, which is resolved to a concrete arXiv version before the canonical record is written.

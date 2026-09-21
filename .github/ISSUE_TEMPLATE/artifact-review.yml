@@ -7,7 +7,7 @@ body:
     id: arxiv
     attributes:
       label: arXiv ID
-      placeholder: "2511.15927"
+      placeholder: "YYMM.NNNNN"
     validations:
       required: true
   - type: dropdown

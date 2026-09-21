@@ -160,8 +160,11 @@ jobs:
           python - "$record_file" "$ISSUE" <<'PY'
           import json
           from pathlib import Path
+          import re
           import sys
           import yaml
+
+          from scripts.submission import fetch_arxiv_metadata
 
           path = Path(sys.argv[1])
           issue = sys.argv[2]
@@ -173,6 +176,16 @@ jobs:
           tags = ", ".join(record.get("tags", [])) or "none"
           evidence = ", ".join(record.get("evidence", [])) or "not supplied (optional)"
           summary = record["summary"]
+          paper = fetch_arxiv_metadata(arxiv_id, paper_version)
+
+          def markdown_text(value):
+              return re.sub(r"([\\\x60*_{}\[\]<>#|])", r"\\\1", value)
+
+          paper_title = markdown_text(paper.title)
+          paper_authors = ", ".join(markdown_text(author) for author in paper.authors)
+          paper_abstract = markdown_text(paper.abstract)
+          paper_abs_url = f"https://arxiv.org/abs/{arxiv_id}{paper_version}"
+          pr_title = f"Add PaperTrust record (arXiv:{arxiv_id})"
 
           metadata = {
               "arxiv_id": arxiv_id,
@@ -180,6 +193,7 @@ jobs:
               "paper_version": paper_version,
               "tags": tags,
               "evidence": evidence,
+              "pr_title": pr_title,
           }
           Path("/tmp/papertrust-metadata.json").write_text(
               json.dumps(metadata), encoding="utf-8"
@@ -187,15 +201,24 @@ jobs:
 
           body = f"""Generated automatically from a format-valid PaperTrust submission.
 
+          ## Paper
+          - **Title:** {paper_title}
+          - **Authors:** {paper_authors}
+          - **arXiv:** [arXiv:{arxiv_id} {paper_version}]({paper_abs_url})
+          - **PDF:** [Open PDF]({paper.pdf_url})
+
+          ### Abstract
+
+          {paper_abstract}
+
           ## Canonical record
           - **Source issue:** #{issue}
-          - **arXiv:** {arxiv_id}
           - **Resolved paper version:** {paper_version}
           - **Record type:** {record_type}
           - **Tags:** {tags}
           - **Evidence DOI:** {evidence}
 
-          ## Summary
+          ## PaperTrust summary
 
           {summary}
 
@@ -219,18 +242,19 @@ jobs:
           paper_version="$(jq -r .paper_version /tmp/papertrust-metadata.json)"
           tags="$(jq -r .tags /tmp/papertrust-metadata.json)"
           evidence="$(jq -r .evidence /tmp/papertrust-metadata.json)"
+          pr_title="$(jq -r .pr_title /tmp/papertrust-metadata.json)"
 
           pr_number="$(gh pr list --repo "$REPO" --head "$branch" --state open --json number --jq '.[0].number // empty')"
           if [ -n "$pr_number" ]; then
             gh pr edit "$pr_number" --repo "$REPO" \
-              --title "Add PaperTrust record from issue #$ISSUE" \
+              --title "$pr_title" \
               --body-file /tmp/papertrust-pr-body.md
           else
             pr_url="$(gh pr create \
               --repo "$REPO" \
               --head "$branch" \
               --base main \
-              --title "Add PaperTrust record from issue #$ISSUE" \
+              --title "$pr_title" \
               --body-file /tmp/papertrust-pr-body.md)"
             pr_number="${pr_url##*/}"
 

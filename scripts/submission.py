@@ -5,6 +5,7 @@ import re
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
+from html.parser import HTMLParser
 
 ARXIV_ID_RE = re.compile(r"(?:[0-9]{4}\.[0-9]{4,5}|[a-z-]+/[0-9]{7})")
 VERSION_RE = re.compile(r"v([1-9][0-9]*)")
@@ -72,6 +73,14 @@ class Submission:
     summary: str
     evidence_doi: str | None
     result: str | None = None
+
+
+@dataclass(frozen=True)
+class ArxivMetadata:
+    title: str
+    authors: tuple[str, ...]
+    abstract: str
+    pdf_url: str
 
 
 def _clean_optional(value: str) -> str:
@@ -174,6 +183,64 @@ def parse_issue(issue: dict) -> Submission:
         summary=summary,
         evidence_doi=evidence_doi,
         result=result,
+    )
+
+
+class _CitationMetaParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self.values: dict[str, list[str]] = {}
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag.lower() != "meta":
+            return
+        attributes = {key.lower(): value for key, value in attrs if value is not None}
+        name = attributes.get("name", "").lower()
+        content = attributes.get("content", "")
+        if name.startswith("citation_") and content:
+            self.values.setdefault(name, []).append(html.unescape(content))
+
+
+def fetch_arxiv_metadata(arxiv_id: str, paper_version: str) -> ArxivMetadata:
+    if not ARXIV_ID_RE.fullmatch(arxiv_id):
+        raise SubmissionError("invalid arXiv ID")
+    if not VERSION_RE.fullmatch(paper_version):
+        raise SubmissionError("invalid paper version")
+
+    safe_id = urllib.parse.quote(arxiv_id, safe="/")
+    request = urllib.request.Request(
+        f"https://arxiv.org/abs/{safe_id}{paper_version}",
+        headers={"User-Agent": "PaperTrust/1.0 (god@papertrust.org)"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            page = response.read(2_000_000).decode("utf-8", errors="replace")
+    except Exception as exc:
+        raise SubmissionError("could not resolve arXiv metadata") from exc
+
+    parser = _CitationMetaParser()
+    parser.feed(page)
+    values = parser.values
+
+    def one(name: str) -> str:
+        items = values.get(name, [])
+        return " ".join(items[0].split()) if items else ""
+
+    title = one("citation_title")
+    abstract = one("citation_abstract")
+    authors = tuple(
+        " ".join(author.split())
+        for author in values.get("citation_author", [])
+        if author.strip()
+    )
+    if not title or not abstract or not authors:
+        raise SubmissionError("arXiv metadata is incomplete")
+
+    return ArxivMetadata(
+        title=title,
+        authors=authors,
+        abstract=abstract,
+        pdf_url=f"https://arxiv.org/pdf/{safe_id}{paper_version}",
     )
 
 
