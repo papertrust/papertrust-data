@@ -5,7 +5,12 @@ on:
     paths:
       - "papers/**/*.yaml"
       - "schema/**"
-      - "scripts/validate.py"
+      - "scripts/**"
+      - "tests/**"
+      - "requirements.txt"
+      - ".github/ISSUE_TEMPLATE/**"
+      - ".github/workflows/process-issue.yml"
+      - ".github/workflows/validate-pr.yml"
 
 permissions:
   contents: read
@@ -24,6 +29,11 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      - name: Test untrusted submission parsing
+        id: parser_tests
+        continue-on-error: true
+        run: python -m unittest discover -s tests -v
+
       - name: Validate canonical data
         id: validation
         continue-on-error: true
@@ -35,14 +45,15 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
           SHA: ${{ github.event.pull_request.head.sha }}
-          OUTCOME: ${{ steps.validation.outcome }}
+          PARSER_OUTCOME: ${{ steps.parser_tests.outcome }}
+          VALIDATION_OUTCOME: ${{ steps.validation.outcome }}
         run: |
-          if [ "$OUTCOME" = "success" ]; then
+          if [ "$PARSER_OUTCOME" = "success" ] && [ "$VALIDATION_OUTCOME" = "success" ]; then
             state="success"
-            description="Canonical record passed schema validation"
+            description="Canonical data and submission parser passed validation"
           else
             state="failure"
-            description="Canonical record failed schema validation"
+            description="PaperTrust validation failed"
           fi
 
           gh api \
@@ -53,5 +64,5 @@ jobs:
             -f description="$description" >/dev/null
 
       - name: Fail invalid pull request
-        if: steps.validation.outcome != 'success'
+        if: steps.parser_tests.outcome != 'success' || steps.validation.outcome != 'success'
         run: exit 1
