@@ -10,12 +10,64 @@ body:
       placeholder: "2511.15927"
     validations:
       required: true
-  - type: input
+  - type: dropdown
     id: paper_version
     attributes:
       label: Paper version
-      description: The exact arXiv paper version this reproduction targets.
-      placeholder: "v4"
+      description: Choose the exact arXiv version, or leave the default to resolve the latest version at submission time.
+      options:
+        - latest
+        - v1
+        - v2
+        - v3
+        - v4
+        - v5
+        - v6
+        - v7
+        - v8
+        - v9
+        - v10
+        - v11
+        - v12
+        - v13
+        - v14
+        - v15
+        - v16
+        - v17
+        - v18
+        - v19
+        - v20
+        - v21
+        - v22
+        - v23
+        - v24
+        - v25
+        - v26
+        - v27
+        - v28
+        - v29
+        - v30
+        - v31
+        - v32
+        - v33
+        - v34
+        - v35
+        - v36
+        - v37
+        - v38
+        - v39
+        - v40
+        - v41
+        - v42
+        - v43
+        - v44
+        - v45
+        - v46
+        - v47
+        - v48
+        - v49
+        - v50
+      default: 0
     validations:
       required: true
   - type: dropdown
@@ -41,14 +93,15 @@ body:
     id: summary
     attributes:
       label: Summary
-      description: Concisely state what was reproduced and what happened.
+      description: Markdown is supported. Raw HTML, embedded images, and dangerous URL schemes are rejected.
+      placeholder: "Describe what was reproduced, the setup, and the observed result."
     validations:
       required: true
   - type: input
     id: evidence
     attributes:
       label: Evidence DOI
-      description: Use a version-specific DOI for an independently hosted reproduction artifact.
+      description: Optional but encouraged. Use a version-specific DOI for independently hosted evidence when available.
       placeholder: "10.5281/zenodo.1234567"
     validations:
-      required: true
+      required: false

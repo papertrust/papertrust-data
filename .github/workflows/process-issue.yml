@@ -29,10 +29,15 @@ jobs:
 
       - run: pip install -r requirements.txt
 
+      - name: Run submission parser tests
+        run: python -m unittest discover -s tests -v
+
       - name: Validate submission format
         id: validate
         continue-on-error: true
-        run: python scripts/validate_issue.py
+        run: |
+          kind="$(python scripts/validate_issue.py)"
+          printf 'kind=%s\n' "$kind" >> "$GITHUB_OUTPUT"
 
       - name: Reject invalid submission
         if: steps.validate.outcome == 'failure'
@@ -49,6 +54,7 @@ jobs:
           gh issue edit "$ISSUE" --repo "$REPO" --remove-label "status:pending" 2>/dev/null || true
           gh issue edit "$ISSUE" --repo "$REPO" --remove-label "status:format-valid" 2>/dev/null || true
           gh issue edit "$ISSUE" --repo "$REPO" --remove-label "status:pr-open" 2>/dev/null || true
+          gh issue edit "$ISSUE" --repo "$REPO" --remove-label "status:needs-review" 2>/dev/null || true
           gh issue comment "$ISSUE" --repo "$REPO" --body "This submission does not satisfy the PaperTrust format requirements and has been closed automatically. Edit the structured fields and reopen the issue to try again."
           gh issue close "$ISSUE" --repo "$REPO" --reason "not planned"
 
@@ -58,27 +64,39 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ISSUE: ${{ github.event.issue.number }}
           REPO: ${{ github.repository }}
-          TITLE: ${{ github.event.issue.title }}
+          KIND: ${{ steps.validate.outputs.kind }}
         run: |
           gh issue edit "$ISSUE" --repo "$REPO" --remove-label "status:pending" 2>/dev/null || true
+          gh issue edit "$ISSUE" --repo "$REPO" --remove-label "status:needs-review" 2>/dev/null || true
           gh issue edit "$ISSUE" --repo "$REPO" --add-label "status:format-valid"
-          case "$TITLE" in
-            "[Reproduction]"*) type_label="submission:reproduction" ;;
-            "[Artifact review]"*) type_label="submission:artifact-review" ;;
-            *) type_label="" ;;
+          case "$KIND" in
+            reproduction) type_label="submission:reproduction" ;;
+            artifact_review) type_label="submission:artifact-review" ;;
+            *) exit 1 ;;
           esac
-          if [ -n "$type_label" ]; then
-            gh issue edit "$ISSUE" --repo "$REPO" --add-label "$type_label"
-          fi
+          gh issue edit "$ISSUE" --repo "$REPO" --add-label "$type_label"
 
       - name: Generate canonical record
+        id: generate
         if: steps.validate.outcome == 'success'
+        continue-on-error: true
         run: |
           python scripts/issue_to_record.py
           python scripts/validate.py
 
+      - name: Mark conversion failure for review
+        if: steps.validate.outcome == 'success' && steps.generate.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          gh issue edit "$ISSUE" --repo "$REPO" --remove-label "status:format-valid" 2>/dev/null || true
+          gh issue edit "$ISSUE" --repo "$REPO" --add-label "status:needs-review"
+          gh issue comment "$ISSUE" --repo "$REPO" --body "The structured fields are valid, but PaperTrust could not resolve or convert this submission automatically. No record was written; a maintainer should review it."
+
       - name: Detect duplicate
-        if: steps.validate.outcome == 'success'
+        if: steps.generate.outcome == 'success'
         id: diff
         run: |
           if [ -z "$(git status --porcelain -- papers)" ]; then
@@ -88,7 +106,7 @@ jobs:
           fi
 
       - name: Close duplicate submission
-        if: steps.validate.outcome == 'success' && steps.diff.outputs.changed == 'false'
+        if: steps.generate.outcome == 'success' && steps.diff.outputs.changed == 'false'
         env:
           GH_TOKEN: ${{ github.token }}
           ISSUE: ${{ github.event.issue.number }}
@@ -99,7 +117,7 @@ jobs:
           gh issue close "$ISSUE" --repo "$REPO" --reason "not planned"
 
       - name: Create or update canonical-record PR
-        if: steps.validate.outcome == 'success' && steps.diff.outputs.changed == 'true'
+        if: steps.generate.outcome == 'success' && steps.diff.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           ISSUE: ${{ github.event.issue.number }}
