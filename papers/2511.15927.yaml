@@ -1,0 +1,17 @@
+records:
+  - type: artifact_review
+    paper_version: v4
+    tags:
+      - training_code_missing
+      - checkpoint_missing
+      - raw_results_missing
+      - documentation_incomplete
+    summary: >
+      As of 2026-09-21, the **arXiv v4 page** does not link an implementation
+      repository or model release. GitHub searches for the paper title and arXiv
+      identifier did not surface a clearly author-affiliated DiffuMamba
+      implementation, and a Hugging Face model search for “DiffuMamba” returned
+      no matching model release. A similarly named GitHub repository found by
+      search was unrelated based on its README. This record describes public
+      artifact discoverability at the time of checking; it does **not** infer why
+      the artifacts are unavailable.
