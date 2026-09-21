@@ -1,0 +1,13 @@
+records:
+- type: reproduction
+  paper_version: v2
+  tags:
+  - independent_reproduction
+  - evaluation_code_missing
+  - checkpoint_missing
+  - documentation_incomplete
+  - performance_mismatch
+  summary: A peer-reviewed 2023 ReScience C replication of Behavior Transformers extended the released implementation because it lacked some environments, evaluation metrics, and ablations used in the paper. The resulting experiments supported the main claims in a substantial subset of cases, while many numerical values diverged from those reported. The study concludes that the work was largely replicable but not readily reproducible, and notes unpinned dependencies plus unavailable training curves and model weights.
+  result: partially_reproduced
+  evidence:
+  - 10.5281/zenodo.8173757
