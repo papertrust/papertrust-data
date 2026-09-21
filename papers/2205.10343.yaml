@@ -1,0 +1,10 @@
+records:
+- type: reproduction
+  paper_version: v2
+  tags:
+  - independent_reproduction
+  - undocumented_configuration
+  summary: A peer-reviewed 2023 ReScience C replication reproduced the phase diagrams for the paper's toy setting and observed similar behavior on MNIST. A broader hyperparameter sweep exposed an additional memorization region and led the replicators to describe the original MNIST phase characterization as incomplete. The report also states that critical hyperparameters, including the toy-model activation and MNIST batch size, were not specified in the paper and had to be clarified with the authors.
+  result: partially_reproduced
+  evidence:
+  - 10.5281/zenodo.8173755
