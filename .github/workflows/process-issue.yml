@@ -185,7 +185,7 @@ jobs:
           paper_authors = ", ".join(markdown_text(author) for author in paper.authors)
           paper_abstract = markdown_text(paper.abstract)
           paper_abs_url = f"https://arxiv.org/abs/{arxiv_id}{paper_version}"
-          pr_title = f"Add PaperTrust record (arXiv:{arxiv_id})"
+          pr_title = f"Add PaperTrust record from issue #{issue} (arXiv:{arxiv_id})"
 
           metadata = {
               "arxiv_id": arxiv_id,
