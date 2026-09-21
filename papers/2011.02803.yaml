@@ -1,0 +1,10 @@
+records:
+- type: reproduction
+  paper_version: v3
+  tags:
+  - independent_reproduction
+  - evaluation_code_missing
+  summary: A peer-reviewed 2023 ReScience C study independently re-implemented experiments concerning local features and contrastive-loss behavior because the original repository did not provide code for the reproduced experiments. The reported results supported the tested original claims, but the linear-evaluation study used a smaller encoder, fewer training epochs, and different dataset or batch-size choices because of compute limits. This record therefore marks the evidence as a partial reproduction rather than an exact end-to-end rerun.
+  result: partially_reproduced
+  evidence:
+  - 10.5281/zenodo.8173662
