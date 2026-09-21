@@ -1,0 +1,12 @@
+records:
+- type: artifact_review
+  paper_version: v2
+  tags:
+  - disputed
+  summary: 'On 2025-05-16, MIT Economics published an official statement saying that, after an internal review, MIT had **no confidence in the provenance, reliability or validity of the data** and **no confidence in the veracity of the research** in this preprint. MIT also stated that it had formally asked arXiv and *The Quarterly Journal of Economics* to withdraw the paper.
+
+
+    Primary institutional source: https://economics.mit.edu/news/assuring-accurate-research-record
+
+
+    This PaperTrust record reports MIT''s published institutional conclusion and withdrawal request; it does not add an independent allegation about author intent.'
