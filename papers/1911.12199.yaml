@@ -1,0 +1,10 @@
+records:
+- type: reproduction
+  paper_version: v4
+  tags:
+  - independent_reproduction
+  - documentation_incomplete
+  summary: 'A peer-reviewed 2023 ReScience C replication reran the released FOCUS experiments and added retraining and robustness checks. It replicated the result that counterfactual explanations could be found for the evaluated instances, while the claim of consistently smaller counterfactual distances was supported less uniformly: half of the evaluated models still outperformed the comparison method and some mean distances deviated from the paper. The report also describes sparse code comments and documentation.'
+  result: partially_reproduced
+  evidence:
+  - 10.5281/zenodo.8173678
