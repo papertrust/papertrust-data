@@ -7,6 +7,7 @@ on:
 
 permissions:
   actions: write
+  contents: write
   pull-requests: read
   issues: write
 
@@ -35,6 +36,26 @@ jobs:
 
             gh issue edit "$issue" --repo "$REPO" --remove-label "status:pr-open" 2>/dev/null || true
             gh issue close "$issue" --repo "$REPO" --reason completed               --comment "Canonical record merged in #$merged_pr. Closing this submission automatically."
+          done
+
+      - name: Delete merged record branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          mapfile -t refs < <(
+            gh api --paginate "repos/$REPO/git/matching-refs/heads/papertrust/issue-"               --jq '.[].ref'
+          )
+
+          for ref in "${refs[@]}"; do
+            branch="${ref#refs/heads/}"
+            merged_pr="$(
+              gh pr list                 --repo "$REPO"                 --state merged                 --head "$branch"                 --limit 1                 --json number                 --jq '.[0].number // empty'
+            )"
+
+            if [ -n "$merged_pr" ]; then
+              gh api --method DELETE "repos/$REPO/git/refs/heads/$branch"
+            fi
           done
 
       - name: Regenerate open bot record PRs from current main
