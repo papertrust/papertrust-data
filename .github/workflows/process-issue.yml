@@ -272,7 +272,7 @@ jobs:
           - **Auto-merge:** enabled
           - **Merge gate:** 2 approvals
 
-          The PaperTrust reviewers team is requested automatically. Once any 2 eligible reviewers approve, GitHub will squash-merge the PR, delete its temporary branch, and close this Issue automatically.
+          The PaperTrust reviewers team is requested automatically through CODEOWNERS. Once any 2 eligible reviewers approve, GitHub will squash-merge the PR, delete its temporary branch, and close this Issue automatically.
           EOF
             )"
             gh issue comment "$ISSUE" --repo "$REPO" --body "$issue_comment"
@@ -281,7 +281,5 @@ jobs:
           fi
 
           gh issue edit "$ISSUE" --repo "$REPO" --add-label "status:pr-open"
-
-          gh api --method POST             "repos/$REPO/pulls/$pr_number/requested_reviewers"             -f team_reviewers[]=reviewers >/dev/null
 
           gh pr merge "$pr_number" --repo "$REPO" --auto --squash --delete-branch
