@@ -97,6 +97,17 @@ class SubmissionTests(unittest.TestCase):
         self.assertEqual(metadata.abstract, "A synthetic abstract used only for automated testing.")
         self.assertEqual(metadata.pdf_url, "https://arxiv.org/pdf/9913.99999v3")
 
+    def test_latest_version_accepts_submission_history_markers(self):
+        page = b"""<!doctype html><div class="submission-history">
+[v1] synthetic first version
+[v2] synthetic revision
+[v5] synthetic latest revision
+</div>"""
+        with patch("scripts.submission.urllib.request.urlopen", return_value=io.BytesIO(page)):
+            from scripts.submission import latest_arxiv_version
+
+            self.assertEqual(latest_arxiv_version("9913.99999"), "v5")
+
     def test_build_record_resolves_latest_and_omits_evidence(self):
         submission = parse_issue(reproduction_issue("A sufficiently detailed reproduction summary for testing."))
         with patch("scripts.submission.latest_arxiv_version", return_value="v4"):

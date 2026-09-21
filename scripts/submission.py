@@ -259,8 +259,10 @@ def latest_arxiv_version(arxiv_id: str) -> str:
     except Exception as exc:
         raise SubmissionError("could not resolve the latest arXiv version") from exc
 
+    decoded = html.unescape(page)
     escaped = re.escape(arxiv_id)
-    versions = {int(value) for value in re.findall(escaped + r"v([1-9][0-9]*)", html.unescape(page))}
+    versions = {int(value) for value in re.findall(escaped + r"v([1-9][0-9]*)", decoded)}
+    versions.update(int(value) for value in re.findall(r"\[v([1-9][0-9]*)\]", decoded))
     if not versions:
         raise SubmissionError("could not determine the latest arXiv version")
     return f"v{max(versions)}"
